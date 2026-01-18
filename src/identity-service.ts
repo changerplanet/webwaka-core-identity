@@ -99,12 +99,18 @@ export class IdentityService {
 
   /**
    * Get user by ID
+   * 
+   * In Clerk mode, verifies the user is a member of the specified tenant
+   * to enforce strict tenant isolation.
    */
   async getUser(tenantId: TenantId, userId: UserId): Promise<UserProfile | null> {
     validate(TenantIdSchema, tenantId);
     validate(UserIdSchema, userId);
 
     if (this.clerkAdapter) {
+      const isMember = await this.isUserInTenant(tenantId, userId);
+      if (!isMember) return null;
+      
       const clerkUser = await this.clerkAdapter.getUser(userId);
       if (!clerkUser) return null;
       return clerkUserToProfile(clerkUser, tenantId);
@@ -115,6 +121,9 @@ export class IdentityService {
 
   /**
    * Get user by phone number
+   * 
+   * In Clerk mode, verifies the user is a member of the specified tenant
+   * to enforce strict tenant isolation.
    */
   async getUserByPhone(tenantId: TenantId, phone: string): Promise<UserProfile | null> {
     validate(TenantIdSchema, tenantId);
@@ -123,6 +132,10 @@ export class IdentityService {
     if (this.clerkAdapter) {
       const clerkUser = await this.clerkAdapter.getUserByPhone(normalizedPhone);
       if (!clerkUser) return null;
+      
+      const isMember = await this.isUserInTenant(tenantId, clerkUser.id);
+      if (!isMember) return null;
+      
       return clerkUserToProfile(clerkUser, tenantId);
     }
 
@@ -131,6 +144,9 @@ export class IdentityService {
 
   /**
    * Get user by email
+   * 
+   * In Clerk mode, verifies the user is a member of the specified tenant
+   * to enforce strict tenant isolation.
    */
   async getUserByEmail(tenantId: TenantId, email: string): Promise<UserProfile | null> {
     validate(TenantIdSchema, tenantId);
@@ -139,10 +155,24 @@ export class IdentityService {
     if (this.clerkAdapter) {
       const clerkUser = await this.clerkAdapter.getUserByEmail(email);
       if (!clerkUser) return null;
+      
+      const isMember = await this.isUserInTenant(tenantId, clerkUser.id);
+      if (!isMember) return null;
+      
       return clerkUserToProfile(clerkUser, tenantId);
     }
 
     return this.userStorage.getUserByEmail(tenantId, email);
+  }
+
+  /**
+   * Check if a user is a member of a tenant (Clerk organization)
+   */
+  private async isUserInTenant(tenantId: TenantId, userId: UserId): Promise<boolean> {
+    if (!this.clerkAdapter) return false;
+    
+    const members = await this.clerkAdapter.listOrganizationMembers(tenantId);
+    return members.some(member => member.id === userId);
   }
 
   /**

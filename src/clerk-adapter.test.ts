@@ -373,6 +373,7 @@ describe('IdentityService with Clerk Adapter', () => {
       };
 
       adapter.addUser(clerkUser);
+      adapter.addOrgMember('tenant_1', 'user_123');
       adapter.addSession('valid_token', claims);
 
       const identity = await service.resolveIdentity('valid_token');
@@ -464,6 +465,7 @@ describe('IdentityService with Clerk Adapter', () => {
 
     beforeEach(() => {
       adapter.addUser(clerkUser);
+      adapter.addOrgMember('tenant_1', 'user_lookup');
     });
 
     it('should get user by ID via Clerk', async () => {
@@ -604,6 +606,8 @@ describe('IdentityService with Clerk Adapter', () => {
       };
 
       adapter.addUser(user);
+      adapter.addOrgMember('tenant_alpha', 'context_user');
+      adapter.addOrgMember('tenant_beta', 'context_user');
       adapter.addSession('token_alpha', claimsA);
       adapter.addSession('token_beta', claimsB);
 
@@ -615,6 +619,72 @@ describe('IdentityService with Clerk Adapter', () => {
 
       expect(identityB.tenantId).toBe('tenant_beta');
       expect(identityB.roles).toContain('viewer');
+    });
+
+    it('should prevent cross-tenant user access by ID', async () => {
+      const user: ClerkUser = {
+        id: 'cross_tenant_user',
+        emailAddresses: [{ id: 'e1', emailAddress: 'cross@example.com' }],
+        phoneNumbers: [{ id: 'p1', phoneNumber: '+2348011112222' }],
+        publicMetadata: {},
+        privateMetadata: {},
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      adapter.addUser(user);
+      adapter.addOrgMember('tenant_x', 'cross_tenant_user');
+
+      const foundInTenantX = await service.getUser('tenant_x', 'cross_tenant_user');
+      const notFoundInTenantY = await service.getUser('tenant_y', 'cross_tenant_user');
+
+      expect(foundInTenantX).not.toBeNull();
+      expect(foundInTenantX!.tenantId).toBe('tenant_x');
+      expect(notFoundInTenantY).toBeNull();
+    });
+
+    it('should prevent cross-tenant user access by phone', async () => {
+      const user: ClerkUser = {
+        id: 'phone_cross_user',
+        emailAddresses: [],
+        phoneNumbers: [{ id: 'p1', phoneNumber: '+2348033334444' }],
+        publicMetadata: {},
+        privateMetadata: {},
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      adapter.addUser(user);
+      adapter.addOrgMember('phone_tenant_a', 'phone_cross_user');
+
+      const foundInA = await service.getUserByPhone('phone_tenant_a', '+2348033334444');
+      const notFoundInB = await service.getUserByPhone('phone_tenant_b', '+2348033334444');
+
+      expect(foundInA).not.toBeNull();
+      expect(notFoundInB).toBeNull();
+    });
+
+    it('should prevent cross-tenant user access by email', async () => {
+      const user: ClerkUser = {
+        id: 'email_cross_user',
+        primaryEmailAddressId: 'e1',
+        emailAddresses: [{ id: 'e1', emailAddress: 'crossemail@example.com' }],
+        phoneNumbers: [{ id: 'p1', phoneNumber: '+2348055556666' }],
+        publicMetadata: {},
+        privateMetadata: {},
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      adapter.addUser(user);
+      adapter.addOrgMember('email_tenant_a', 'email_cross_user');
+
+      const foundInA = await service.getUserByEmail('email_tenant_a', 'crossemail@example.com');
+      const notFoundInB = await service.getUserByEmail('email_tenant_b', 'crossemail@example.com');
+
+      expect(foundInA).not.toBeNull();
+      expect(foundInA!.email).toBe('crossemail@example.com');
+      expect(notFoundInB).toBeNull();
     });
   });
 });
@@ -658,6 +728,7 @@ describe('HARD STOP PROOF: Session token returns (tenantId, userId, roles, metad
     };
 
     adapter.addUser(clerkUser);
+    adapter.addOrgMember('suite_tenant_xyz', 'suite_user_123');
     adapter.addSession('suite_session_token_123', sessionClaims);
 
     const identity = await service.resolveIdentity('suite_session_token_123');

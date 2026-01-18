@@ -261,7 +261,6 @@ describe('IdentityService', () => {
 
   describe('tenant isolation', () => {
     it('should enforce tenant isolation in all operations', async () => {
-      // Create users in two tenants
       const user1 = await service.createUser({
         tenantId: 'tenant-1',
         phone: '08012345678',
@@ -272,21 +271,185 @@ describe('IdentityService', () => {
         phone: '08087654321',
       });
 
-      // Tenant 1 cannot access tenant 2's user
       const crossTenantAccess = await service.getUser('tenant-1', user2.userId);
       expect(crossTenantAccess).toBeNull();
 
-      // Authenticate user1 in tenant-1
       const authResult = await service.authenticate({
         tenantId: 'tenant-1',
         phone: '08012345678',
         credential: 'password123',
       });
 
-      // Resolve identity should return tenant-1 data
       const identity = await service.resolveIdentity(authResult.sessionId);
       expect(identity.tenantId).toBe('tenant-1');
       expect(identity.userId).toBe(user1.userId);
+    });
+  });
+
+  describe('getUserByEmail', () => {
+    it('should retrieve user by email', async () => {
+      const input = {
+        tenantId: 'tenant-1',
+        phone: '08012345678',
+        email: 'user@example.com',
+      };
+
+      const created = await service.createUser(input);
+      const retrieved = await service.getUserByEmail('tenant-1', 'user@example.com');
+
+      expect(retrieved).not.toBeNull();
+      expect(retrieved!.email).toBe('user@example.com');
+      expect(retrieved!.userId).toBe(created.userId);
+    });
+
+    it('should be case insensitive for email lookup', async () => {
+      await service.createUser({
+        tenantId: 'tenant-1',
+        phone: '08012345678',
+        email: 'User@Example.COM',
+      });
+
+      const retrieved = await service.getUserByEmail('tenant-1', 'user@example.com');
+      expect(retrieved).not.toBeNull();
+    });
+
+    it('should return null for non-existent email', async () => {
+      const user = await service.getUserByEmail('tenant-1', 'nonexistent@example.com');
+      expect(user).toBeNull();
+    });
+
+    it('should enforce tenant isolation for email lookup', async () => {
+      await service.createUser({
+        tenantId: 'tenant-1',
+        phone: '08012345678',
+        email: 'isolated@example.com',
+      });
+
+      const retrieved = await service.getUserByEmail('tenant-2', 'isolated@example.com');
+      expect(retrieved).toBeNull();
+    });
+  });
+
+  describe('listUsers', () => {
+    it('should list users in a tenant', async () => {
+      await service.createUser({
+        tenantId: 'list-tenant',
+        phone: '08011111111',
+      });
+      await service.createUser({
+        tenantId: 'list-tenant',
+        phone: '08022222222',
+      });
+      await service.createUser({
+        tenantId: 'other-tenant',
+        phone: '08033333333',
+      });
+
+      const users = await service.listUsers('list-tenant');
+
+      expect(users).toHaveLength(2);
+      expect(users.every(u => u.tenantId === 'list-tenant')).toBe(true);
+    });
+
+    it('should support pagination', async () => {
+      for (let i = 0; i < 5; i++) {
+        await service.createUser({
+          tenantId: 'paginated-tenant',
+          phone: `0801234567${i}`,
+        });
+      }
+
+      const page1 = await service.listUsers('paginated-tenant', { limit: 2, offset: 0 });
+      const page2 = await service.listUsers('paginated-tenant', { limit: 2, offset: 2 });
+
+      expect(page1).toHaveLength(2);
+      expect(page2).toHaveLength(2);
+    });
+
+    it('should return empty array for tenant with no users', async () => {
+      const users = await service.listUsers('empty-tenant');
+      expect(users).toEqual([]);
+    });
+  });
+
+  describe('assertTenantContext', () => {
+    it('should return tenant context from valid session', async () => {
+      await service.createUser({
+        tenantId: 'context-tenant',
+        phone: '08099999999',
+      });
+
+      const authResult = await service.authenticate({
+        tenantId: 'context-tenant',
+        phone: '08099999999',
+        credential: 'password',
+      }, ['admin', 'user']);
+
+      const context = await service.assertTenantContext(authResult.sessionId);
+
+      expect(context.tenantId).toBe('context-tenant');
+      expect(context.userId).toBeDefined();
+      expect(context.roles).toContain('admin');
+      expect(context.roles).toContain('user');
+      expect(context.sessionId).toBe(authResult.sessionId);
+    });
+
+    it('should throw for invalid session', async () => {
+      await expect(
+        service.assertTenantContext('invalid-session')
+      ).rejects.toThrow('Unauthorized');
+    });
+  });
+
+  describe('deleteUser', () => {
+    it('should delete user and their sessions', async () => {
+      const user = await service.createUser({
+        tenantId: 'delete-tenant',
+        phone: '08077777777',
+      });
+
+      const authResult = await service.authenticate({
+        tenantId: 'delete-tenant',
+        phone: '08077777777',
+        credential: 'password',
+      });
+
+      await service.deleteUser('delete-tenant', user.userId);
+
+      const deletedUser = await service.getUser('delete-tenant', user.userId);
+      const validation = await service.validateSession(authResult.sessionId);
+
+      expect(deletedUser).toBeNull();
+      expect(validation.valid).toBe(false);
+    });
+  });
+
+  describe('logoutAll', () => {
+    it('should delete all sessions for a user', async () => {
+      const user = await service.createUser({
+        tenantId: 'multi-session-tenant',
+        phone: '08066666666',
+      });
+
+      const session1 = await service.authenticate({
+        tenantId: 'multi-session-tenant',
+        phone: '08066666666',
+        credential: 'password',
+      });
+
+      const session2 = await service.authenticate({
+        tenantId: 'multi-session-tenant',
+        phone: '08066666666',
+        credential: 'password',
+      });
+
+      await service.logoutAll('multi-session-tenant', user.userId);
+
+      const validation1 = await service.validateSession(session1.sessionId);
+      const validation2 = await service.validateSession(session2.sessionId);
+
+      expect(validation1.valid).toBe(false);
+      expect(validation2.valid).toBe(false);
     });
   });
 });

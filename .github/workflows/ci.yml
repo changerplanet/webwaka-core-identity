@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    name: Validate Module
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Validate manifest structure
+        run: |
+          if [ ! -f "module.manifest.json" ]; then
+            echo "Error: module.manifest.json not found"
+            exit 1
+          fi
+          
+          # Validate JSON syntax
+          if ! jq empty module.manifest.json 2>/dev/null; then
+            echo "Error: module.manifest.json is not valid JSON"
+            exit 1
+          fi
+          
+          # Validate required fields
+          required_fields=("id" "name" "version" "type" "description")
+          for field in "${required_fields[@]}"; do
+            if ! jq -e ".$field" module.manifest.json > /dev/null 2>&1; then
+              echo "Error: Required field '$field' missing from module.manifest.json"
+              exit 1
+            fi
+          done
+          
+          echo "✓ Manifest validation passed"
+      
+      - name: Validate mandatory files
+        run: |
+          required_files=(
+            "README.md"
+            "module.manifest.json"
+            "module.contract.md"
+            "CHANGELOG.md"
+            "OWNERS.md"
+            "SECURITY.md"
+          )
+          
+          missing_files=()
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              missing_files+=("$file")
+            fi
+          done
+          
+          if [ ${#missing_files[@]} -gt 0 ]; then
+            echo "Error: Missing required files:"
+            printf '  - %s\n' "${missing_files[@]}"
+            exit 1
+          fi
+          
+          echo "✓ All mandatory files present"
+      
+      - name: Validate repository naming
+        run: |
+          repo_name="${GITHUB_REPOSITORY##*/}"
+          manifest_id=$(jq -r '.id' module.manifest.json)
+          
+          if [ "$repo_name" != "$manifest_id" ]; then
+            echo "Error: Repository name ($repo_name) does not match manifest ID ($manifest_id)"
+            exit 1
+          fi
+          
+          # Validate prefix
+          valid_prefixes=("webwaka-core-" "webwaka-suite-" "webwaka-industry-" "webwaka-ext-" "webwaka-infra-")
+          prefix_valid=false
+          
+          for prefix in "${valid_prefixes[@]}"; do
+            if [[ "$repo_name" == "$prefix"* ]]; then
+              prefix_valid=true
+              break
+            fi
+          done
+          
+          if [ "$prefix_valid" = false ]; then
+            echo "Error: Repository name must start with one of: ${valid_prefixes[*]}"
+            exit 1
+          fi
+          
+          echo "✓ Repository naming validation passed"

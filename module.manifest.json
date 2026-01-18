@@ -4,7 +4,13 @@
   "version": "0.1.0",
   "type": "core",
   "description": "Identity, authentication, and user management core service",
-  "capabilities": [],
+  "capabilities": [
+    "identity-resolution",
+    "user-management",
+    "authentication",
+    "session-management",
+    "tenant-isolation"
+  ],
   "dependencies": [],
   "maintainers": [
     {

@@ -2,7 +2,7 @@
  * Core Identity Service
  * 
  * Provides canonical identity resolution, user profiles, authentication primitives,
- * and tenant-aware session context.
+ * and tenant-aware session context. Acts as a Clerk adapter/resolver.
  */
 
 import { randomBytes } from 'crypto';
@@ -19,6 +19,7 @@ import {
   AuthenticateInput,
   AuthResult,
   SessionValidation,
+  TenantContext,
 } from './types';
 import { normalizeNigerianPhone } from './phone-utils';
 import {
@@ -29,8 +30,14 @@ import {
   TenantIdSchema,
   UserIdSchema,
   SessionIdSchema,
+  EmailSchema,
 } from './validation';
 import { UserStorage, SessionStorage } from './storage';
+import {
+  ClerkAdapterInterface,
+  extractTenantContext,
+  clerkUserToProfile,
+} from './clerk-adapter';
 
 /**
  * Identity service configuration
@@ -38,43 +45,44 @@ import { UserStorage, SessionStorage } from './storage';
 export interface IdentityServiceConfig {
   userStorage: UserStorage;
   sessionStorage: SessionStorage;
-  sessionDurationMs?: number; // Default: 24 hours
+  sessionDurationMs?: number;
+  clerkAdapter?: ClerkAdapterInterface;
 }
 
 /**
  * Identity Service
+ * 
+ * Provider-agnostic identity service with Clerk adapter support.
+ * Can operate in two modes:
+ * 1. Standalone mode - uses local storage for sessions
+ * 2. Clerk mode - uses Clerk for session verification and user data
  */
 export class IdentityService {
   private userStorage: UserStorage;
   private sessionStorage: SessionStorage;
   private sessionDurationMs: number;
+  private clerkAdapter?: ClerkAdapterInterface;
 
   constructor(config: IdentityServiceConfig) {
     this.userStorage = config.userStorage;
     this.sessionStorage = config.sessionStorage;
-    this.sessionDurationMs = config.sessionDurationMs || 24 * 60 * 60 * 1000; // 24 hours
+    this.sessionDurationMs = config.sessionDurationMs || 24 * 60 * 60 * 1000;
+    this.clerkAdapter = config.clerkAdapter;
   }
 
   /**
    * Create a new user
    */
   async createUser(input: CreateUserInput): Promise<UserProfile> {
-    // Validate input
     const validated = validate(CreateUserInputSchema, input);
-
-    // Normalize phone number
     const normalizedPhone = normalizeNigerianPhone(validated.phone);
 
-    // Check if user already exists
     const existing = await this.userStorage.getUserByPhone(validated.tenantId, normalizedPhone);
     if (existing) {
       throw new Error(`User with phone ${normalizedPhone} already exists in tenant ${validated.tenantId}`);
     }
 
-    // Generate user ID
     const userId = this.generateId();
-
-    // Create user profile
     const profile: UserProfile = {
       userId,
       tenantId: validated.tenantId,
@@ -95,6 +103,13 @@ export class IdentityService {
   async getUser(tenantId: TenantId, userId: UserId): Promise<UserProfile | null> {
     validate(TenantIdSchema, tenantId);
     validate(UserIdSchema, userId);
+
+    if (this.clerkAdapter) {
+      const clerkUser = await this.clerkAdapter.getUser(userId);
+      if (!clerkUser) return null;
+      return clerkUserToProfile(clerkUser, tenantId);
+    }
+
     return this.userStorage.getUser(tenantId, userId);
   }
 
@@ -104,7 +119,48 @@ export class IdentityService {
   async getUserByPhone(tenantId: TenantId, phone: string): Promise<UserProfile | null> {
     validate(TenantIdSchema, tenantId);
     const normalizedPhone = normalizeNigerianPhone(phone);
+
+    if (this.clerkAdapter) {
+      const clerkUser = await this.clerkAdapter.getUserByPhone(normalizedPhone);
+      if (!clerkUser) return null;
+      return clerkUserToProfile(clerkUser, tenantId);
+    }
+
     return this.userStorage.getUserByPhone(tenantId, normalizedPhone);
+  }
+
+  /**
+   * Get user by email
+   */
+  async getUserByEmail(tenantId: TenantId, email: string): Promise<UserProfile | null> {
+    validate(TenantIdSchema, tenantId);
+    validate(EmailSchema, email);
+
+    if (this.clerkAdapter) {
+      const clerkUser = await this.clerkAdapter.getUserByEmail(email);
+      if (!clerkUser) return null;
+      return clerkUserToProfile(clerkUser, tenantId);
+    }
+
+    return this.userStorage.getUserByEmail(tenantId, email);
+  }
+
+  /**
+   * List users in a tenant
+   */
+  async listUsers(tenantId: TenantId, options?: { limit?: number; offset?: number }): Promise<UserProfile[]> {
+    validate(TenantIdSchema, tenantId);
+    const limit = options?.limit || 100;
+    const offset = options?.offset || 0;
+
+    if (this.clerkAdapter) {
+      const clerkUsers = await this.clerkAdapter.listOrganizationMembers(tenantId);
+      return clerkUsers
+        .slice(offset, offset + limit)
+        .map(u => clerkUserToProfile(u, tenantId));
+    }
+
+    return this.userStorage.listUsers(tenantId, limit, offset);
   }
 
   /**
@@ -128,37 +184,25 @@ export class IdentityService {
     validate(TenantIdSchema, tenantId);
     validate(UserIdSchema, userId);
 
-    // Delete all sessions for this user
     await this.sessionStorage.deleteUserSessions(tenantId, userId);
-
-    // Delete user profile
     await this.userStorage.deleteUser(tenantId, userId);
   }
 
   /**
    * Authenticate a user
    * 
-   * Note: This is a primitive authentication method. In production, this should
-   * integrate with a proper authentication provider (e.g., OAuth, SAML, etc.)
-   * The credential validation is intentionally left abstract to avoid lock-in.
+   * Note: In Clerk mode, authentication happens outside this module.
+   * This method is for standalone mode only.
    */
   async authenticate(input: AuthenticateInput, roles: RoleId[] = []): Promise<AuthResult> {
     const validated = validate(AuthenticateInputSchema, input);
-
-    // Normalize phone number
     const normalizedPhone = normalizeNigerianPhone(validated.phone);
 
-    // Get user by phone
     const user = await this.userStorage.getUserByPhone(validated.tenantId, normalizedPhone);
     if (!user) {
       throw new Error('Invalid credentials');
     }
 
-    // Credential validation would happen here
-    // For now, we assume the credential is valid if the user exists
-    // In production, this should call an external auth provider
-
-    // Create session
     const sessionId = this.generateId();
     const issuedAt = new Date();
     const expiresAt = new Date(issuedAt.getTime() + this.sessionDurationMs);
@@ -189,12 +233,31 @@ export class IdentityService {
   async validateSession(sessionId: SessionId): Promise<SessionValidation> {
     validate(SessionIdSchema, sessionId);
 
+    if (this.clerkAdapter) {
+      const claims = await this.clerkAdapter.verifySession(sessionId);
+      if (!claims) {
+        return { valid: false, reason: 'Invalid or expired session' };
+      }
+
+      const tenantContext = extractTenantContext(claims);
+      return {
+        valid: true,
+        context: {
+          sessionId: tenantContext.sessionId,
+          userId: tenantContext.userId,
+          tenantId: tenantContext.tenantId,
+          roles: tenantContext.roles,
+          issuedAt: tenantContext.issuedAt,
+          expiresAt: tenantContext.expiresAt,
+        },
+      };
+    }
+
     const context = await this.sessionStorage.getSession(sessionId);
     if (!context) {
       return { valid: false, reason: 'Session not found' };
     }
 
-    // Check if session has expired
     if (context.expiresAt < new Date()) {
       await this.sessionStorage.deleteSession(sessionId);
       return { valid: false, reason: 'Session expired' };
@@ -204,15 +267,18 @@ export class IdentityService {
   }
 
   /**
-   * Resolve identity from session
+   * Resolve identity from session token
+   * 
+   * HARD STOP REQUIREMENT: A Suite can provide a session token and reliably receive
+   * (tenantId, userId, roles, identity metadata)
    */
-  async resolveIdentity(sessionId: SessionId): Promise<IdentityResolution> {
-    const validation = await this.validateSession(sessionId);
+  async resolveIdentity(sessionToken: SessionId): Promise<IdentityResolution> {
+    const validation = await this.validateSession(sessionToken);
     if (!validation.valid || !validation.context) {
       throw new Error(`Invalid session: ${validation.reason}`);
     }
 
-    const profile = await this.userStorage.getUser(
+    const profile = await this.getUser(
       validation.context.tenantId,
       validation.context.userId
     );
@@ -226,6 +292,26 @@ export class IdentityService {
       tenantId: profile.tenantId,
       roles: validation.context.roles,
       profile,
+    };
+  }
+
+  /**
+   * Assert tenant context from session token
+   * 
+   * Validates session and returns tenant context, throwing if invalid.
+   * Use this to enforce tenant isolation in downstream services.
+   */
+  async assertTenantContext(sessionToken: SessionId): Promise<TenantContext> {
+    const validation = await this.validateSession(sessionToken);
+    if (!validation.valid || !validation.context) {
+      throw new Error(`Unauthorized: ${validation.reason || 'Invalid session'}`);
+    }
+
+    return {
+      tenantId: validation.context.tenantId,
+      userId: validation.context.userId,
+      roles: validation.context.roles,
+      sessionId: validation.context.sessionId,
     };
   }
 
@@ -246,9 +332,6 @@ export class IdentityService {
     await this.sessionStorage.deleteUserSessions(tenantId, userId);
   }
 
-  /**
-   * Generate a unique ID
-   */
   private generateId(): string {
     return randomBytes(16).toString('hex');
   }

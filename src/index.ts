@@ -3,12 +3,13 @@
  * 
  * Provides canonical identity resolution, user profiles, authentication primitives,
  * and tenant-aware session context for the WebWaka platform.
+ * 
+ * Uses Clerk as the Identity Provider - this module is a Clerk adapter + resolver.
+ * Authentication happens outside this module.
  */
 
-// Main service
 export { IdentityService, IdentityServiceConfig } from './identity-service';
 
-// Types
 export {
   TenantId,
   UserId,
@@ -23,9 +24,9 @@ export {
   UpdateUserInput,
   AuthenticateInput,
   SessionValidation,
+  TenantContext,
 } from './types';
 
-// Storage interfaces
 export {
   UserStorage,
   SessionStorage,
@@ -33,14 +34,23 @@ export {
   InMemorySessionStorage,
 } from './storage';
 
-// Utilities
+export {
+  ClerkAdapterInterface,
+  ClerkSessionClaims,
+  ClerkUser,
+  ClerkSessionVerification,
+  ClerkTenantContext,
+  MockClerkAdapter,
+  clerkUserToProfile,
+  extractTenantContext,
+} from './clerk-adapter';
+
 export {
   normalizeNigerianPhone,
   isValidNigerianPhone,
   formatNigerianPhone,
 } from './phone-utils';
 
-// Validation
 export {
   validate,
   TenantIdSchema,

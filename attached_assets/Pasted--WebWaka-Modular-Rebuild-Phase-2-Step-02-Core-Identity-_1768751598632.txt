@@ -1,0 +1,123 @@
+
+WebWaka Modular Rebuild
+
+Phase 2 — Step 02: Core Identity
+
+Platform: Replit
+
+Repo: changerplanet/webwaka-core-identity
+
+Branch: main (DIRECT COMMIT ALLOWED)
+
+⸻
+
+CONTEXT
+
+You are implementing Phase 2 – Step 02 of the WebWaka Modular Rebuild.
+
+This task builds the canonical identity core used by all Suites and Industry modules.
+
+This is a TypeScript-only, headless library.
+
+⸻
+
+NON-NEGOTIABLE RULES
+	1.	Clone the repository FIRST
+
+https://github.com/changerplanet/webwaka-core-identity
+
+
+	2.	Work directly on main
+	•	No branches
+	•	No rebases
+	•	No force pushes
+	3.	Technology constraints
+	•	TypeScript only
+	•	No UI
+	•	No framework
+	•	No backend/server
+	•	No frontend folders
+	4.	Do not add any scaffolding
+	•	NO /frontend
+	•	NO /backend
+	•	NO hidden config directories
+
+⸻
+
+OSS DECISION (ALREADY APPROVED)
+
+Use Clerk as the Identity Provider.
+	•	This module is a Clerk adapter + resolver
+	•	Authentication happens outside this module
+	•	Mock Clerk in tests
+
+⸻
+
+REQUIRED CAPABILITIES
+
+Expose a clean IdentityService with:
+	•	resolveIdentity(sessionToken)
+	•	getUser(tenantId, userId)
+	•	getUserByPhone(tenantId, phone)
+	•	getUserByEmail(tenantId, email)
+	•	listUsers(tenantId)
+	•	assertTenantContext(sessionToken)
+
+Rules
+	•	Nigeria-first phone normalization (+234)
+	•	Strict tenant isolation
+	•	Provider-agnostic interface
+	•	No PII leakage
+
+⸻
+
+MANIFEST REQUIREMENTS
+
+Update module.manifest.json:
+	•	moduleId: webwaka-core-identity
+	•	class: core
+	•	dependencies:
+	•	webwaka-core-registry
+	•	Capabilities:
+	•	identity:resolve
+	•	identity:get-user
+	•	identity:list-users
+
+⸻
+
+TESTING
+	•	Jest or Vitest
+	•	≥ 80% coverage
+	•	Tests MUST prove:
+	•	Tenant isolation
+	•	Phone normalization
+	•	Clerk adapter behavior
+	•	Identity resolution
+
+⸻
+
+HARD STOP CONDITION (MANDATORY)
+
+A Suite can provide a session token and reliably receive
+(tenantId, userId, roles, identity metadata)
+
+If this is not demonstrably true → STOP.
+
+⸻
+
+DELIVERY
+	1.	Commit directly to main
+	2.	Push to GitHub
+	3.	Provide a completion summary:
+	•	Files added
+	•	APIs exposed
+	•	Coverage
+	•	Hard stop proof
+
+Then STOP and wait for authorization.
+
+⸻
+
+🚫 DO NOT PROCEED TO STEP 03 WITHOUT EXPLICIT APPROVAL
+
+⸻

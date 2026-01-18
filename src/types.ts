@@ -112,3 +112,13 @@ export interface SessionValidation {
   context?: SessionContext;
   reason?: string;
 }
+
+/**
+ * Tenant context for downstream services
+ */
+export interface TenantContext {
+  tenantId: TenantId;
+  userId: UserId;
+  roles: RoleId[];
+  sessionId: SessionId;
+}

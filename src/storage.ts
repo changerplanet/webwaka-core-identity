@@ -27,6 +27,11 @@ export interface UserStorage {
   getUserByPhone(tenantId: TenantId, phone: string): Promise<UserProfile | null>;
 
   /**
+   * Get a user profile by email
+   */
+  getUserByEmail(tenantId: TenantId, email: string): Promise<UserProfile | null>;
+
+  /**
    * Update a user profile
    */
   updateUser(tenantId: TenantId, userId: UserId, updates: Partial<UserProfile>): Promise<UserProfile>;
@@ -81,6 +86,10 @@ export class InMemoryUserStorage implements UserStorage {
     return `${tenantId}:phone:${phone}`;
   }
 
+  private getEmailKey(tenantId: TenantId, email: string): string {
+    return `${tenantId}:email:${email.toLowerCase()}`;
+  }
+
   async createUser(profile: UserProfile): Promise<UserProfile> {
     const key = this.getKey(profile.tenantId, profile.userId);
     const phoneKey = this.getPhoneKey(profile.tenantId, profile.phone);
@@ -95,6 +104,12 @@ export class InMemoryUserStorage implements UserStorage {
     
     this.users.set(key, profile);
     this.users.set(phoneKey, profile);
+    
+    if (profile.email) {
+      const emailKey = this.getEmailKey(profile.tenantId, profile.email);
+      this.users.set(emailKey, profile);
+    }
+    
     return profile;
   }
 
@@ -106,6 +121,11 @@ export class InMemoryUserStorage implements UserStorage {
   async getUserByPhone(tenantId: TenantId, phone: string): Promise<UserProfile | null> {
     const phoneKey = this.getPhoneKey(tenantId, phone);
     return this.users.get(phoneKey) || null;
+  }
+
+  async getUserByEmail(tenantId: TenantId, email: string): Promise<UserProfile | null> {
+    const emailKey = this.getEmailKey(tenantId, email);
+    return this.users.get(emailKey) || null;
   }
 
   async updateUser(tenantId: TenantId, userId: UserId, updates: Partial<UserProfile>): Promise<UserProfile> {
@@ -138,15 +158,26 @@ export class InMemoryUserStorage implements UserStorage {
       const phoneKey = this.getPhoneKey(tenantId, user.phone);
       this.users.delete(key);
       this.users.delete(phoneKey);
+      
+      if (user.email) {
+        const emailKey = this.getEmailKey(tenantId, user.email);
+        this.users.delete(emailKey);
+      }
     }
   }
 
   async listUsers(tenantId: TenantId, limit: number, offset: number): Promise<UserProfile[]> {
-    const tenantUsers = Array.from(this.users.values())
-      .filter(user => user.tenantId === tenantId && user.userId)
-      .slice(offset, offset + limit);
+    const seen = new Set<string>();
+    const tenantUsers: UserProfile[] = [];
     
-    return tenantUsers;
+    for (const user of this.users.values()) {
+      if (user.tenantId === tenantId && !seen.has(user.userId)) {
+        seen.add(user.userId);
+        tenantUsers.push(user);
+      }
+    }
+    
+    return tenantUsers.slice(offset, offset + limit);
   }
 }
 

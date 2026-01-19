@@ -2,46 +2,27 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   validate:
-    name: Validate Module
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
       
-      - name: Validate manifest structure
-        run: |
-          if [ ! -f "module.manifest.json" ]; then
-            echo "Error: module.manifest.json not found"
-            exit 1
-          fi
-          
-          # Validate JSON syntax
-          if ! jq empty module.manifest.json 2>/dev/null; then
-            echo "Error: module.manifest.json is not valid JSON"
-            exit 1
-          fi
-          
-          # Validate required fields
-          required_fields=("id" "name" "version" "type" "description")
-          for field in "${required_fields[@]}"; do
-            if ! jq -e ".$field" module.manifest.json > /dev/null 2>&1; then
-              echo "Error: Required field '$field' missing from module.manifest.json"
-              exit 1
-            fi
-          done
-          
-          echo "✓ Manifest validation passed"
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
       
       - name: Validate mandatory files
         run: |
-          required_files=(
+          echo "Checking for mandatory files..."
+          files=(
             "README.md"
             "module.manifest.json"
             "module.contract.md"
@@ -51,44 +32,76 @@ jobs:
           )
           
           missing_files=()
-          for file in "${required_files[@]}"; do
+          for file in "${files[@]}"; do
             if [ ! -f "$file" ]; then
               missing_files+=("$file")
             fi
           done
           
-          if [ ${#missing_files[@]} -gt 0 ]; then
-            echo "Error: Missing required files:"
-            printf '  - %s\n' "${missing_files[@]}"
+          if [ ${#missing_files[@]} -ne 0 ]; then
+            echo "❌ Missing mandatory files:"
+            printf '%s\n' "${missing_files[@]}"
             exit 1
           fi
           
           echo "✓ All mandatory files present"
       
-      - name: Validate repository naming
+      - name: Validate module manifest
         run: |
-          repo_name="${GITHUB_REPOSITORY##*/}"
-          manifest_id=$(jq -r '.id' module.manifest.json)
+          echo "Validating module.manifest.json..."
           
-          if [ "$repo_name" != "$manifest_id" ]; then
-            echo "Error: Repository name ($repo_name) does not match manifest ID ($manifest_id)"
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          
+          # Check if manifest is valid JSON
+          if ! jq empty module.manifest.json 2>/dev/null; then
+            echo "❌ module.manifest.json is not valid JSON"
             exit 1
           fi
           
-          # Validate prefix
-          valid_prefixes=("webwaka-core-" "webwaka-suite-" "webwaka-industry-" "webwaka-ext-" "webwaka-infra-")
-          prefix_valid=false
-          
-          for prefix in "${valid_prefixes[@]}"; do
-            if [[ "$repo_name" == "$prefix"* ]]; then
-              prefix_valid=true
-              break
+          # Check required fields
+          required_fields=("moduleId" "version" "class" "name" "description")
+          for field in "${required_fields[@]}"; do
+            if ! jq -e ".$field" module.manifest.json > /dev/null; then
+              echo "❌ Missing required field: $field"
+              exit 1
             fi
           done
           
-          if [ "$prefix_valid" = false ]; then
-            echo "Error: Repository name must start with one of: ${valid_prefixes[*]}"
+          # Validate class is 'core'
+          class=$(jq -r '.class' module.manifest.json)
+          if [ "$class" != "core" ]; then
+            echo "❌ class must be 'core', got '$class'"
             exit 1
           fi
           
-          echo "✓ Repository naming validation passed"
+          echo "✓ module.manifest.json is valid"
+      
+      - name: Check for package.json (if exists)
+        run: |
+          if [ -f "package.json" ]; then
+            echo "package.json found, installing dependencies..."
+            npm ci
+            
+            echo "Running build (if configured)..."
+            if jq -e '.scripts.build' package.json > /dev/null; then
+              npm run build
+            else
+              echo "No build script found, skipping"
+            fi
+            
+            echo "Running tests (if configured)..."
+            if jq -e '.scripts.test' package.json > /dev/null; then
+              npm test
+            else
+              echo "No test script found, skipping"
+            fi
+          else
+            echo "No package.json found yet - implementation pending"
+          fi
+      
+      - name: Summary
+        run: |
+          echo "✅ CI validation passed"
+          echo "Repository is ready for implementation"

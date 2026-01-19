@@ -1,83 +1,45 @@
 # webwaka-core-identity
 
-**Type:** core  
-**Description:** Identity, authentication, and user management core service
+**Identity & Control - Canonical identity resolution and user profiles**
+
+## Overview
+
+This repository is part of the WebWaka Core Substrate. It provides shared services for the WebWaka platform.
 
 ## Status
 
-✅ **Phase 2.1 Complete** - Core identity service implemented and tested.
+🚧 **Infrastructure Ready** - Implementation pending
 
-This module provides production-grade identity resolution, user management, authentication, and session management with strict tenant isolation.
+## Purpose
 
-## Features
+This is a **Core Module** in the WebWaka modular architecture:
 
-- **Identity Resolution**: Resolve (tenant_id, user_id, roles) from session tokens
-- **User Management**: CRUD operations for user profiles with tenant isolation
-- **Authentication**: Provider-agnostic authentication primitives
-- **Session Management**: Secure session creation, validation, and lifecycle management
-- **Nigerian Phone Normalization**: Automatic normalization to E.164 format
-- **Storage Abstraction**: Pluggable storage backends for flexibility
+- **Classification:** `core`
+- **Prefix:** `webwaka-core-`
+- **Type:** Headless TypeScript library
+- **Consumers:** Suite modules (POS, SVM, MVM, etc.)
 
-## Installation
+## Integration
 
-```bash
-pnpm install
-```
+This module will be consumed by Suite modules through npm package installation or monorepo workspace dependencies. It does not provide UI components—only business logic and data access interfaces.
 
-## Usage
+## Dependencies
 
-```typescript
-import { IdentityService, InMemoryUserStorage, InMemorySessionStorage } from 'webwaka-core-identity';
+- `webwaka-core-registry` - Module registration and capability resolution
 
-// Create service instance
-const identityService = new IdentityService({
-  userStorage: new InMemoryUserStorage(),
-  sessionStorage: new InMemorySessionStorage(),
-});
+## Development
 
-// Create a user
-const user = await identityService.createUser({
-  tenantId: 'tenant-1',
-  phone: '08012345678',  // Auto-normalized to +2348012345678
-  displayName: 'John Doe',
-});
+This repository follows WebWaka governance standards:
 
-// Authenticate
-const authResult = await identityService.authenticate({
-  tenantId: 'tenant-1',
-  phone: '08012345678',
-  credential: 'password123',
-}, ['user']);
-
-// Resolve identity from session
-const identity = await identityService.resolveIdentity(authResult.sessionId);
-console.log(identity.userId, identity.tenantId, identity.roles);
-```
-
-## Testing
-
-```bash
-pnpm test
-```
-
-## Documentation
-
-- [Module Contract](./module.contract.md) - Defines the module's capabilities, dependencies, and API surface
-- [Changelog](./CHANGELOG.md) - Version history and changes
-- [Security Policy](./SECURITY.md) - Security guidelines and vulnerability reporting
-- [Owners](./OWNERS.md) - Maintainers and code review requirements
-
-## Module Manifest
-
-See `module.manifest.json` for the complete module specification.
-
-## Contributing
-
-This module follows the WebWaka architectural rules:
-- All changes must go through pull requests
-- CI/CD checks must pass before merging
-- Manifest validation is enforced automatically
+- All changes require PR review
+- CI must pass before merge
+- Main branch allows direct pushes (for now)
+- Automatic deployment via Vercel
 
 ## License
 
-MIT
+To be determined
+
+## Contact
+
+For questions or contributions, see OWNERS.md

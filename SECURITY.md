@@ -4,38 +4,64 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+| 0.0.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in this module, please report it by emailing:
+If you discover a security vulnerability in this module, please report it responsibly:
 
-**changerplanet@gmail.com**
+1. **Do not** open a public issue
+2. Email security concerns to: [security contact to be added]
+3. Include:
+   - Description of the vulnerability
+   - Steps to reproduce
+   - Potential impact
+   - Suggested fix (if available)
 
-Please include:
-- A description of the vulnerability
-- Steps to reproduce the issue
-- Potential impact assessment
-- Suggested remediation (if any)
+## Security Considerations
 
-### Response Timeline
+### Tenant Isolation
 
-- **Initial Response**: Within 48 hours
-- **Status Update**: Within 7 days
-- **Resolution Target**: Within 30 days for critical issues
+This module handles multi-tenant data. All queries and operations must enforce strict tenant isolation:
 
-## Security Best Practices
+- Never allow cross-tenant data access
+- Validate `tenantId` on every operation
+- Ensure database queries include tenant filters
+- Test tenant isolation in all scenarios
 
-This module adheres to the WebWaka security baseline:
-- All user inputs are validated and sanitized
-- Authentication and authorization are enforced at all entry points
-- Sensitive data is encrypted in transit and at rest
-- Audit trails are maintained for all critical operations
-- Dependencies are regularly updated and scanned for vulnerabilities
+### Data Integrity
 
-## Disclosure Policy
+All data operations must maintain integrity:
 
-We follow responsible disclosure practices:
-1. Security issues are fixed privately
-2. Patches are released before public disclosure
-3. Credit is given to reporters (unless anonymity is requested)
+- Implement idempotency to prevent duplicate operations
+- Use transactions to prevent race conditions
+- Validate all input data
+- Log all critical operations for audit
+
+### Access Control
+
+While this module does not implement authentication:
+
+- Consumers must authenticate users before calling methods
+- Sensitive operations should require elevated permissions
+- Audit all operations with actor attribution
+
+## Dependencies
+
+This module depends on:
+
+- `webwaka-core-registry` - Ensure registry is kept up to date
+
+Regularly audit dependencies for known vulnerabilities.
+
+## Compliance
+
+This module must comply with:
+
+- Data protection regulations (GDPR, NDPR, etc.)
+- Financial record-keeping requirements (where applicable)
+- Industry-specific standards
+
+## Updates
+
+This security policy will be updated as the module evolves. Check back regularly for changes.

@@ -1,18 +1,35 @@
 # Owners
 
-This file defines the ownership and maintainership of this module.
+This file lists the individuals and teams responsible for this repository.
 
-## Primary Maintainers
+## Primary Owners
 
-- **ChangerPlanet Team** (changerplanet@gmail.com)
+- **WebWaka Core Team** - Responsible for architecture and implementation decisions
 
-## Code Review Requirements
+## Responsibilities
 
-- All pull requests require at least one approval from a primary maintainer
-- Breaking changes require approval from all primary maintainers
+### Primary Owners
+- Review and approve all pull requests
+- Ensure adherence to WebWaka architectural standards
+- Maintain module contract and manifest accuracy
+- Coordinate with Suite teams on integration requirements
 
-## Escalation Path
+### Contributors
+- Follow governance standards
+- Write tests for all new functionality
+- Update documentation with changes
+- Ensure tenant isolation in all code
 
-For questions or concerns about this module, contact the primary maintainers via:
-- Email: changerplanet@gmail.com
-- GitHub Issues: https://github.com/ChangerPlanet/webwaka-core-identity/issues
+## Contact
+
+For questions about this module, please:
+1. Open an issue in this repository
+2. Tag @webwaka-core-team in pull requests
+3. Refer to the module contract for scope questions
+
+## Governance
+
+This repository follows the WebWaka Modular Rebuild governance standards. All changes must:
+- Pass CI checks
+- Include tests and documentation updates
+- Maintain backward compatibility or follow semver for breaking changes

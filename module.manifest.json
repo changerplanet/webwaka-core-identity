@@ -1,43 +1,16 @@
 {
   "moduleId": "webwaka-core-identity",
-  "name": "Core Identity",
-  "version": "0.2.0",
+  "version": "0.0.0",
   "class": "core",
-  "description": "Identity, authentication, and user management core service. Clerk adapter + resolver.",
-  "capabilities": [
-    "identity:resolve",
-    "identity:get-user",
-    "identity:list-users",
-    "identity:assert-tenant-context",
-    "tenant-isolation",
-    "phone-normalization"
-  ],
-  "dependencies": [
-    "webwaka-core-registry"
-  ],
+  "name": "Identity Core",
+  "description": "Identity & Control - Canonical identity resolution and user profiles",
+  "repository": "https://github.com/changerplanet/webwaka-core-identity",
+  "author": "WebWaka Team",
+  "license": "TBD",
+  "capabilities": [],
+  "dependencies": [],
   "exports": {
-    "IdentityService": "Main identity service class",
-    "resolveIdentity": "Resolve (tenantId, userId, roles) from session token",
-    "getUser": "Get user by tenant and user ID",
-    "getUserByPhone": "Get user by phone with Nigeria-first normalization",
-    "getUserByEmail": "Get user by email",
-    "listUsers": "List users in a tenant",
-    "assertTenantContext": "Assert and return tenant context from session"
-  },
-  "providerIntegration": {
-    "provider": "clerk",
-    "mode": "adapter",
-    "note": "Authentication happens outside this module. This is a Clerk adapter/resolver."
-  },
-  "maintainers": [
-    {
-      "name": "ChangerPlanet Team",
-      "email": "changerplanet@gmail.com"
-    }
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ChangerPlanet/webwaka-core-identity"
-  },
-  "license": "MIT"
+    "types": "./dist/index.d.ts",
+    "main": "./dist/index.js"
+  }
 }
